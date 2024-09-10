@@ -7,7 +7,7 @@ import subprocess
 import sys
 import typing
 from pathlib import Path
-from typing import Annotated, List
+from typing import Annotated
 
 import typer
 from rich import print as rprint
@@ -23,9 +23,7 @@ app = typer.Typer()
 def get_site_content_paths(site: Site) -> list[Path | None]:
     """Get the content paths from the route_list in the Site"""
 
-    base_paths = map(
-        lambda x: getattr(x, "content_path", None), site.route_list.values()
-    )
+    base_paths = map(lambda x: getattr(x, "content_path", None), site.route_list.values())
     return list(filter(lambda x: x is not None, base_paths))
 
 
@@ -64,20 +62,16 @@ def get_available_themes(console: Console, site: Site, theme_name: str) -> list[
         return []
 
 
-def create_collection_entry(content: str, collection: Collection, **context):
+def create_collection_entry(content: str | None, collection: Collection, **context):
     """Creates a new entry for a collection"""
-    return collection.Parser.create_entry(
-        content=content, **collection._metadata_attrs(), **context
-    )
+    return collection.Parser.create_entry(content=content, **collection._metadata_attrs(), **context)
 
 
 def split_args(args: list[str] | None) -> dict[str, str]:
     return {value.split("=")[0]: value.split("=")[1] for value in args if args}
 
 
-def display_filtered_templates(
-    title: str, templates_list: list[str], filter_value: str
-) -> None:
+def display_filtered_templates(title: str, templates_list: list[str], filter_value: str) -> None:
     """Display filtered templates based on a given filter value."""
     table = Table(title=title)
     table.add_column("[bold blue]Templates[bold blue]")
@@ -90,12 +84,8 @@ def display_filtered_templates(
 @app.command()
 def templates(
     module_site: Annotated[tuple[str, str], typer.Argument(callback=split_module_site)],
-    theme_name: Annotated[
-        str, typer.Option("--theme-name", help="Theme to search templates in")
-    ] = "",
-    filter_value: Annotated[
-        str, typer.Option("--filter-value", help="Filter templates based on names")
-    ] = "",
+    theme_name: Annotated[str, typer.Option("--theme-name", help="Theme to search templates in")] = "",
+    filter_value: Annotated[str, typer.Option("--filter-value", help="Filter templates based on names")] = "",
 ):
     """
     CLI for listing available theme templates.
@@ -105,8 +95,8 @@ def templates(
         theme_name: Optional. Specifies the theme to list templates from.
         filter_value: Optional. Filters templates based on provided names.
     """
-    module, site = module_site
-    site = get_site(module, site)
+    module, site_name = module_site
+    site = get_site(module, site_name)
     console = Console()
 
     if theme_name:
@@ -118,9 +108,7 @@ def templates(
                 filter_value,
             )
     else:
-        console.print(
-            "[red]No theme name specified. Listing all installed themes and their templates[red]"
-        )
+        console.print("[red]No theme name specified. Listing all installed themes and their templates[red]")
         for theme_prefix, theme_loader in site.theme_manager.prefix.items():
             templates_list = theme_loader.list_templates()
             display_filtered_templates(
@@ -147,9 +135,7 @@ def init(
         ]
         | None
     ) = None,
-    no_input: Annotated[
-        bool, typer.Option("--no-input", help="Do not prompt for parameters")
-    ] = False,
+    no_input: Annotated[bool, typer.Option("--no-input", help="Do not prompt for parameters")] = False,
     output_dir: Annotated[
         Path,
         typer.Option(
@@ -159,9 +145,7 @@ def init(
             exists=True,
         ),
     ] = Path("./"),
-    cookiecutter_args: Annotated[
-        Path, typer.Option(callback=lambda x: json.loads(x))
-    ] = {},
+    cookiecutter_args: Annotated[Path, typer.Option(callback=lambda x: json.loads(x))] = {},
 ) -> None:
     """
     Create a new site configuration. You can provide extra_context to the cookiecutter template.
@@ -175,9 +159,11 @@ def init(
     try:
         from cookiecutter.main import cookiecutter
     except ImportError:
-        raise typer.Exit(
+        typer.echo(
             "You need to install cookiecutter to use this command. Run `pip install cookiecutter` to install it.",
+            err=True,
         )
+        raise typer.Exit(0)
     cookiecutter(
         template=template,
         extra_context=extra_context,
@@ -198,7 +184,7 @@ def init(
 @app.command()
 def build(
     module_site: Annotated[
-        str,
+        tuple[str, str],
         typer.Argument(
             callback=split_module_site,
             help="module:site for Build the site prior to serving",
@@ -220,8 +206,8 @@ def build(
         module_site: Python module and initialize Site class
 
     """
-    module, site = module_site
-    site = get_site(module, site)
+    module, site_name = module_site
+    site = get_site(module, site_name)
     if clean:
         remove_output_folder(Path(site.output_path))
     site.render()
@@ -230,7 +216,7 @@ def build(
 @app.command()
 def serve(
     module_site: Annotated[
-        str,
+        tuple[str, str],
         typer.Argument(
             callback=split_module_site,
             help="module:site for Build the site prior to serving",
@@ -285,8 +271,8 @@ def serve(
         port: Port to serve on
     """
 
-    module, site = module_site
-    site = get_site(module, site)
+    module, site_name = module_site
+    site = get_site(module, site_name)
 
     if clean:
         remove_output_folder(Path(site.output_path))
@@ -310,7 +296,7 @@ def serve(
 @app.command()
 def new_entry(
     module_site: Annotated[
-        str,
+        tuple[str, str],
         typer.Argument(
             callback=split_module_site,
             help="module:site for Build the site prior to serving",
@@ -322,31 +308,25 @@ def new_entry(
     ],
     filename: Annotated[
         str,
-        typer.Option(
-            help="The filename in which to save the path. Will be saved in the collection's `content_path`"
-        ),
+        typer.Option(help="The filename in which to save the path. Will be saved in the collection's `content_path`"),
     ],
     content: Annotated[
         typing.Optional[str],
         typer.Option(),
     ] = None,
     args: Annotated[
-        typing.Optional[List[str]],  # ruff: # noqa
+        typing.Optional[list[str]],
         typer.Option(
             help="key value attrs to include in your entry use the format `--args key=value`",
         ),
     ] = None,
 ):
     """Creates a new collection entry based on the parser. Entries are added to the Collections content_path"""
-    module, site = module_site
-    args = split_args(args) if args else {}
-    site = get_site(module, site)
-    _collection = next(
-        coll
-        for coll in site.route_list.values()
-        if type(coll).__name__.lower() == collection.lower()
-    )
-    entry = create_collection_entry(content=content, collection=_collection, **args)
+    module, site_name = module_site
+    parsed_args = split_args(args) if args else {}
+    site = get_site(module, site_name)
+    _collection = next(coll for coll in site.route_list.values() if type(coll).__name__.lower() == collection.lower())
+    entry = create_collection_entry(content=content, collection=_collection, **parsed_args)
     filepath = Path(_collection.content_path).joinpath(filename)
     filepath.write_text(entry)
     Console().print(f'New {collection} entry created at "{filepath}"')
